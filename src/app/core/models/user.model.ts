@@ -3,9 +3,9 @@ export interface User {
   employeeCode: string;
   fullName: string;
   email: string;
-  departmentId: string;
+  departmentId: number;
   departmentName: string;
-  businessUnitId: string;
+  businessUnitId: number;
   businessUnitName: string;
   roles: string[];
   status: string;

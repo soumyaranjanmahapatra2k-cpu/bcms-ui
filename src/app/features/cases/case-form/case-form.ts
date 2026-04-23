@@ -307,8 +307,8 @@ export class CaseFormComponent implements OnDestroy {
     } else {
       const user = this.auth.user();
       if (user) {
-        this.form.departmentId = user.departmentId || '';
-        this.form.businessUnitId = user.businessUnitId || '';
+        this.form.departmentId = user.departmentId ? String(user.departmentId) : '';
+        this.form.businessUnitId = user.businessUnitId ? String(user.businessUnitId) : '';
       }
     }
     this.formSnapshot = JSON.stringify(this.form);
