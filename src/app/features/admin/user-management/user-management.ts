@@ -156,6 +156,27 @@ const ALL_ROLES = ['ADMIN', 'SUBMITTER', 'REVIEWER', 'APPROVER', 'AUDITOR', 'MAN
                   }
                 </div>
               </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Reporting Manager</label>
+                  <select [(ngModel)]="formManager">
+                    <option value="">— None —</option>
+                    @for (u of managerCandidates(); track u.userId) {
+                      <option [value]="u.userId">{{ u.fullName }} ({{ u.email }})</option>
+                    }
+                  </select>
+                  <small class="form-hint">Used by workflows that resolve to "Reporting Manager".</small>
+                </div>
+                <div class="form-group">
+                  <label>Job Title</label>
+                  <input [(ngModel)]="formJobTitle" placeholder="e.g. Finance Director" />
+                </div>
+              </div>
+              <div class="form-group checkbox-group">
+                <label><input type="checkbox" [(ngModel)]="formIsDeptHead" />
+                  This user is a Department Head (eligible for "Department Head" workflow steps)
+                </label>
+              </div>
               @if (formError()) { <div class="field-error">{{ formError() }}</div> }
             </div>
             <div class="modal-footer">
@@ -235,6 +256,9 @@ export class UserManagementComponent {
   formDept = '';
   formBu = '';
   formRoles: string[] = [];
+  formManager = '';
+  formJobTitle = '';
+  formIsDeptHead = false;
   formError = signal('');
   saving = signal(false);
 
@@ -268,6 +292,12 @@ export class UserManagementComponent {
 
   filteredUsers(): any[] { return this.users(); }
 
+  /** Users eligible as reporting manager in the form dropdown (exclude self). */
+  managerCandidates(): any[] {
+    const selfId = this.editUser()?.userId;
+    return this.users().filter(u => u.status === 'ACTIVE' && u.userId !== selfId);
+  }
+
   getInitials(name: string): string {
     return name?.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase() || '?';
   }
@@ -284,6 +314,7 @@ export class UserManagementComponent {
     this.editUser.set(null);
     this.formName = ''; this.formEmpCode = ''; this.formEmail = ''; this.formPassword = '';
     this.formDept = ''; this.formBu = ''; this.formRoles = ['SUBMITTER']; this.formError.set('');
+    this.formManager = ''; this.formJobTitle = ''; this.formIsDeptHead = false;
     this.showModal.set(true);
   }
 
@@ -295,6 +326,9 @@ export class UserManagementComponent {
     this.formDept = user.departmentId ?? '';
     this.formBu = user.businessUnitId ?? '';
     this.formRoles = [...(user.roles ?? [])];
+    this.formManager = user.managerUserId ?? '';
+    this.formJobTitle = user.jobTitle ?? '';
+    this.formIsDeptHead = !!user.departmentHead;
     this.formError.set('');
     this.showModal.set(true);
   }
@@ -316,6 +350,9 @@ export class UserManagementComponent {
           departmentId: this.formDept,
           businessUnitId: this.formBu,
           roles: this.formRoles,
+          managerUserId: this.formManager || null,
+          departmentHead: this.formIsDeptHead,
+          jobTitle: this.formJobTitle || null,
         });
         this.toast.success('User updated');
       } else {
@@ -328,6 +365,9 @@ export class UserManagementComponent {
           businessUnitId: this.formBu,
           roles: this.formRoles,
           status: 'ACTIVE',
+          managerUserId: this.formManager || null,
+          departmentHead: this.formIsDeptHead,
+          jobTitle: this.formJobTitle || null,
         });
         this.toast.success('User created');
       }
