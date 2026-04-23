@@ -58,9 +58,13 @@ import { SkeletonLoaderComponent } from '../../../shared/components/skeleton-loa
                     <div class="step-number">{{ step.sequenceNo }}</div>
                     <div class="step-info">
                       <strong>{{ step.stepName }}</strong>
-                      <span>{{ step.approvalType }} · {{ step.approverRole }}</span>
+                      <span>{{ step.approvalType }} · {{ step.assigneeResolverType || step.approverRole }}@if (step.assigneeResolverValue) { &nbsp;({{ step.assigneeResolverValue }}) }</span>
                       @if (step.parallel) {
                         <span class="parallel-tag">Parallel ({{ step.parallelStrategy }})</span>
+                      }
+                      @if (step.optional) { <span class="parallel-tag">Optional</span> }
+                      @if (step.conditionExpression) {
+                        <span class="parallel-tag" [appTooltip]="step.conditionExpression">Conditional</span>
                       }
                     </div>
                     @if (step.slaHours) { <span class="step-sla">{{ step.slaHours }}h SLA</span> }
@@ -168,6 +172,66 @@ import { SkeletonLoaderComponent } from '../../../shared/components/skeleton-loa
                   <label><input type="checkbox" [(ngModel)]="stepParallel" /> Parallel Execution</label>
                 </div>
               </div>
+              @if (stepParallel) {
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Parallel Strategy</label>
+                    <select [(ngModel)]="stepParallelStrategy">
+                      <option value="ALL">ALL — every assignee must approve</option>
+                      <option value="ANY">ANY — first approval completes the step</option>
+                    </select>
+                  </div>
+                </div>
+              }
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Assignee Resolver</label>
+                  <select [(ngModel)]="stepAssigneeType">
+                    <option value="REPORTING_MANAGER">Reporting Manager</option>
+                    <option value="DEPARTMENT_HEAD">Department Head</option>
+                    <option value="BUSINESS_UNIT_HEAD">Business Unit Head</option>
+                    <option value="ROLE_IN_DEPARTMENT">Role — in case's department</option>
+                    <option value="ROLE_IN_BUSINESS_UNIT">Role — in case's BU</option>
+                    <option value="ROLE_GLOBAL">Role — global (legacy)</option>
+                    <option value="FUNCTIONAL_TEAM">Functional Team (category/type)</option>
+                    <option value="USER_DIRECT">Specific Users (CSV of user-ids)</option>
+                  </select>
+                  <small class="form-hint">Controls WHO gets assigned. Hierarchy-aware types respect the case's department/BU.</small>
+                </div>
+                @if (stepAssigneeType === 'ROLE_IN_DEPARTMENT' || stepAssigneeType === 'ROLE_IN_BUSINESS_UNIT' || stepAssigneeType === 'ROLE_GLOBAL' || stepAssigneeType === 'FUNCTIONAL_TEAM' || stepAssigneeType === 'USER_DIRECT') {
+                  <div class="form-group">
+                    <label>
+                      @if (stepAssigneeType === 'USER_DIRECT') { Specific user-ids (comma-separated) }
+                      @else if (stepAssigneeType === 'FUNCTIONAL_TEAM') { Fallback role (optional) }
+                      @else { Role name }
+                    </label>
+                    <input [(ngModel)]="stepAssigneeValue"
+                           [placeholder]="stepAssigneeType === 'USER_DIRECT' ? 'user-app1,user-mgmt' : 'e.g. REVIEWER'" />
+                  </div>
+                }
+              </div>
+              @if (stepAssigneeType === 'REPORTING_MANAGER') {
+                <div class="form-row">
+                  <div class="form-group checkbox-group">
+                    <label><input type="checkbox" [(ngModel)]="stepCascadeManager" />
+                      Cascade up the management chain (resolve to previous actor's manager instead of submitter's manager)
+                    </label>
+                  </div>
+                </div>
+              }
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Condition Expression (optional)</label>
+                  <input [(ngModel)]="stepCondition"
+                         placeholder="e.g. estimatedCost >= 50000 AND caseTypeCode == 'CAPITAL'" />
+                  <small class="form-hint">Identifiers: estimatedCost, categoryCode, caseTypeCode, departmentCode, businessUnitCode, priorityLevel, status, reworkCount. Operators: ==, !=, &gt;, &lt;, &gt;=, &lt;=, IN. Combine with AND / OR.</small>
+                </div>
+                <div class="form-group checkbox-group">
+                  <label><input type="checkbox" [(ngModel)]="stepOptional" />
+                    Optional step — skip silently when condition is false or no assignee
+                  </label>
+                </div>
+              </div>
               @if (stepError()) { <div class="field-error">{{ stepError() }}</div> }
             </div>
             <div class="modal-footer">
@@ -262,6 +326,12 @@ export class WorkflowsComponent {
   stepRole = '';
   stepSla: number | null = null;
   stepParallel = false;
+  stepParallelStrategy = 'ALL';
+  stepAssigneeType = 'ROLE_GLOBAL';
+  stepAssigneeValue = '';
+  stepCondition = '';
+  stepOptional = false;
+  stepCascadeManager = false;
   stepError = signal('');
   savingStep = signal(false);
 
@@ -349,6 +419,12 @@ export class WorkflowsComponent {
     this.editStep.set(null); this.currentWfId = wfId;
     this.stepName = ''; this.stepSeq = (this.wfSteps().length + 1); this.stepApprovalType = 'STANDARD';
     this.stepRole = ''; this.stepSla = null; this.stepParallel = false; this.stepError.set('');
+    this.stepParallelStrategy = 'ALL';
+    this.stepAssigneeType = 'ROLE_GLOBAL';
+    this.stepAssigneeValue = '';
+    this.stepCondition = '';
+    this.stepOptional = false;
+    this.stepCascadeManager = false;
     this.showStepModal.set(true);
   }
 
@@ -360,17 +436,35 @@ export class WorkflowsComponent {
     this.stepRole = step.approverRole ?? '';
     this.stepSla = step.slaHours;
     this.stepParallel = step.parallel ?? false;
+    this.stepParallelStrategy = step.parallelStrategy ?? 'ALL';
+    this.stepAssigneeType = step.assigneeResolverType ?? 'ROLE_GLOBAL';
+    this.stepAssigneeValue = step.assigneeResolverValue ?? '';
+    this.stepCondition = step.conditionExpression ?? '';
+    this.stepOptional = step.optional ?? false;
+    this.stepCascadeManager = step.cascadeManager ?? false;
     this.stepError.set('');
     this.showStepModal.set(true);
   }
 
   async saveStep() {
     if (!this.stepName.trim()) { this.stepError.set('Step name is required'); return; }
-    if (!this.stepRole) { this.stepError.set('Approver role is required'); return; }
+    // Resolver types that don't need a value: REPORTING_MANAGER, DEPARTMENT_HEAD, BUSINESS_UNIT_HEAD
+    const needsValue = ['ROLE_IN_DEPARTMENT', 'ROLE_IN_BUSINESS_UNIT', 'ROLE_GLOBAL', 'USER_DIRECT'];
+    if (needsValue.includes(this.stepAssigneeType) && !this.stepAssigneeValue.trim()) {
+      this.stepError.set('This resolver requires a role name or user-id list');
+      return;
+    }
     this.savingStep.set(true);
     const body: any = {
       stepName: this.stepName.trim(), sequenceNo: this.stepSeq, approvalType: this.stepApprovalType,
-      approverRole: this.stepRole, slaHours: this.stepSla, parallel: this.stepParallel,
+      approverRole: this.stepRole || this.stepAssigneeValue.trim() || null,
+      slaHours: this.stepSla, parallel: this.stepParallel,
+      parallelStrategy: this.stepParallel ? this.stepParallelStrategy : null,
+      assigneeResolverType: this.stepAssigneeType,
+      assigneeResolverValue: this.stepAssigneeValue.trim() || null,
+      conditionExpression: this.stepCondition.trim() || null,
+      optional: this.stepOptional,
+      cascadeManager: this.stepCascadeManager,
     };
     try {
       if (this.editStep()) {

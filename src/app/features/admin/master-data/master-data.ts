@@ -1,4 +1,4 @@
-﻿import { Component, inject, signal, computed } from '@angular/core';
+﻿import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SlicePipe } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
@@ -58,8 +58,9 @@ type StatusFilter = 'all' | 'active' | 'inactive';
             <thead>
               <tr>
                 <th style="width:50px">#</th>
+                <th>Code</th>
                 <th>Name</th>
-                @if (activeTab() === 'caseTypes') { <th>Description</th> }
+                <th>Description</th>
                 @if (activeTab() === 'categories') { <th>Source</th> <th>Keywords</th> }
                 <th style="width:100px">Status</th>
                 <th style="width:120px">Actions</th>
@@ -69,10 +70,11 @@ type StatusFilter = 'all' | 'active' | 'inactive';
               @for (item of paged(); track item.id; let idx = $index) {
                 <tr [style.animation-delay]="idx * 30 + 'ms'" style="animation: fadeInUp 0.2s ease backwards">
                   <td class="row-num">{{ (page() - 1) * pageSize() + idx + 1 }}</td>
+                  <td class="code-cell"><span class="code-badge">{{ item.code || '—' }}</span></td>
                   <td class="name-cell">{{ item.name }}</td>
-                  @if (activeTab() === 'caseTypes') { <td class="desc-cell">{{ item.description || '—' }}</td> }
+                  <td class="desc-cell">{{ item.description || '—' }}</td>
                   @if (activeTab() === 'categories') {
-                    <td><span class="source-tag" [class.tag-ai]="item.sourceType === 'AI'" [class.tag-manual]="item.sourceType === 'Manual'">{{ item.sourceType || 'Manual' }}</span></td>
+                    <td><span class="source-tag" [class.tag-ai]="item.sourceType === 'AI'" [class.tag-manual]="item.sourceType !== 'AI'">{{ item.sourceType || 'Manual' }}</span></td>
                     <td class="kw-cell">{{ item.keywords || '—' }}</td>
                   }
                   <td>
@@ -114,22 +116,35 @@ type StatusFilter = 'all' | 'active' | 'inactive';
               <button class="btn-icon" (click)="closeModal()"><span class="material-icons-outlined">close</span></button>
             </div>
             <div class="modal-body">
+              @if (editItem()?.code) {
+                <div class="form-group">
+                  <label>Code</label>
+                  <input [value]="editItem().code" disabled class="input-disabled" />
+                  <small class="hint">Auto-generated. Cannot be changed.</small>
+                </div>
+              }
               <div class="form-group">
                 <label>Name <span class="required">*</span></label>
                 <input [(ngModel)]="formName" placeholder="Enter name" (keyup.enter)="saveItem()" />
                 @if (formError()) { <span class="field-error">{{ formError() }}</span> }
               </div>
-              @if (activeTab() === 'caseTypes') {
-                <div class="form-group">
-                  <label>Description</label>
-                  <textarea [(ngModel)]="formDescription" placeholder="Brief description of this case type" rows="3"></textarea>
-                </div>
-              }
+              <div class="form-group">
+                <label>Description</label>
+                <textarea [(ngModel)]="formDescription" placeholder="Brief description" rows="3"></textarea>
+              </div>
               @if (activeTab() === 'categories') {
                 <div class="form-group">
                   <label>Keywords</label>
                   <input [(ngModel)]="formKeywords" placeholder="Comma-separated keywords" />
                   <small class="hint">Used for AI auto-categorisation. Comma-separated terms.</small>
+                </div>
+                <div class="form-group">
+                  <label>Source Type</label>
+                  <select [(ngModel)]="formSourceType">
+                    <option value="Manual">Manual</option>
+                    <option value="AI">AI</option>
+                    <option value="Hybrid">Hybrid</option>
+                  </select>
                 </div>
               }
             </div>
@@ -157,7 +172,15 @@ type StatusFilter = 'all' | 'active' | 'inactive';
     .search-sm input { padding-left: 32px; height: 34px; font-size: 0.786rem; width: 180px; }
     .card-icon { font-size: 20px; color: var(--color-primary); }
     .row-num { color: var(--text-muted); font-size: 0.786rem; text-align: center; }
+    .code-cell { white-space: nowrap; }
+    .code-badge {
+      display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm);
+      font-size: 0.714rem; font-weight: 700; font-family: 'Courier New', monospace;
+      background: var(--color-primary-light, rgba(37, 99, 235, 0.08)); color: var(--color-primary);
+      letter-spacing: 0.5px;
+    }
     .name-cell { font-weight: 600; }
+    .desc-cell { color: var(--text-secondary); font-size: 0.786rem; max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .kw-cell { font-size: 0.786rem; color: var(--text-secondary); max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .actions-cell { white-space: nowrap; }
     .status-toggle {
@@ -171,10 +194,10 @@ type StatusFilter = 'all' | 'active' | 'inactive';
     .field-error { color: var(--color-danger); font-size: 0.714rem; margin-top: 4px; display: block; }
     .hint { color: var(--text-muted); font-size: 0.714rem; margin-top: 4px; display: block; }
     .filter-select { height: 34px; padding: 0 10px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text-primary); font-size: 0.786rem; cursor: pointer; }
-    .desc-cell { color: var(--text-secondary); font-size: 0.786rem; max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .source-tag { font-size: 0.679rem; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-full); text-transform: uppercase; letter-spacing: 0.4px; }
     .source-tag.tag-ai { background: rgba(139, 92, 246, 0.14); color: #7c3aed; }
     .source-tag.tag-manual { background: var(--bg-hover); color: var(--text-secondary); }
+    .input-disabled { background: var(--bg-hover); color: var(--text-muted); cursor: not-allowed; }
     .spinner-sm { width: 14px; height: 14px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; display: inline-block; animation: spin 0.6s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
   `]
@@ -202,6 +225,7 @@ export class MasterDataComponent {
   formName = '';
   formKeywords = '';
   formDescription = '';
+  formSourceType = 'Manual';
   formError = signal('');
   saving = signal(false);
 
@@ -228,7 +252,12 @@ export class MasterDataComponent {
     else if (this.statusFilter === 'inactive') filtered = filtered.filter((d: any) => !d.active);
     if (!this.searchQuery.trim()) return filtered;
     const q = this.searchQuery.toLowerCase();
-    return filtered.filter((d: any) => d.name?.toLowerCase().includes(q) || d.description?.toLowerCase().includes(q) || d.keywords?.toLowerCase().includes(q));
+    return filtered.filter((d: any) =>
+      d.name?.toLowerCase().includes(q) ||
+      d.code?.toLowerCase().includes(q) ||
+      d.description?.toLowerCase().includes(q) ||
+      d.keywords?.toLowerCase().includes(q)
+    );
   }
 
   paged(): any[] {
@@ -245,10 +274,10 @@ export class MasterDataComponent {
       const [deps, bus, cts, cats] = await Promise.all([
         this.api.getAllDepartments(), this.api.getAllBusinessUnits(), this.api.getAllCaseTypes(), this.api.getAllCategories()
       ]);
-      this.departments.set((deps ?? []).map((d: any) => ({ id: d.id, name: d.name, active: d.active })));
-      this.businessUnits.set((bus ?? []).map((d: any) => ({ id: d.id, name: d.name, active: d.active })));
-      this.caseTypes.set((cts ?? []).map((d: any) => ({ id: d.id, name: d.name, description: d.description, active: d.active })));
-      this.categories.set((cats ?? []).map((d: any) => ({ id: d.id, name: d.name, sourceType: d.sourceType, adminOverride: d.adminOverrideFlag, keywords: d.keywords, active: d.active })));
+      this.departments.set((deps ?? []).map((d: any) => ({ id: d.id, name: d.name, code: d.code, description: d.description, active: d.active })));
+      this.businessUnits.set((bus ?? []).map((d: any) => ({ id: d.id, name: d.name, code: d.code, description: d.description, active: d.active })));
+      this.caseTypes.set((cts ?? []).map((d: any) => ({ id: d.id, name: d.name, code: d.code, description: d.description, active: d.active })));
+      this.categories.set((cats ?? []).map((d: any) => ({ id: d.id, name: d.name, code: d.code, description: d.description, sourceType: d.sourceType, keywords: d.keywords, active: d.active })));
     } catch { this.toast.error('Failed to load master data'); }
     this.loading.set(false);
   }
@@ -258,6 +287,7 @@ export class MasterDataComponent {
     this.formName = '';
     this.formKeywords = '';
     this.formDescription = '';
+    this.formSourceType = 'Manual';
     this.formError.set('');
     this.showModal.set(true);
   }
@@ -267,6 +297,7 @@ export class MasterDataComponent {
     this.formName = item.name;
     this.formKeywords = item.keywords ?? '';
     this.formDescription = item.description ?? '';
+    this.formSourceType = item.sourceType ?? 'Manual';
     this.formError.set('');
     this.showModal.set(true);
   }
@@ -281,22 +312,22 @@ export class MasterDataComponent {
       const tab = this.activeTab();
       const existing = this.editItem();
       if (existing) {
-        // UPDATE
-        const body: any = { name: this.formName.trim() };
-        if (tab === 'categories') body.keywords = this.formKeywords;
-        if (tab === 'caseTypes') body.description = this.formDescription;
+        const body: any = { name: this.formName.trim(), description: this.formDescription.trim() || null };
+        if (tab === 'categories') {
+          body.keywords = this.formKeywords;
+          body.sourceType = this.formSourceType;
+        }
         if (tab === 'departments') await this.api.updateDepartment(existing.id, body);
         else if (tab === 'businessUnits') await this.api.updateBusinessUnit(existing.id, body);
         else if (tab === 'caseTypes') await this.api.updateCaseType(existing.id, body);
         else if (tab === 'categories') await this.api.updateCategory(existing.id, body);
-        this.toast.success(`${this.tabLabel().slice(0, -1)} updated`);
+        this.toast.success(`${this.tabLabel()!.slice(0, -1)} updated`);
       } else {
-        // CREATE
-        if (tab === 'departments') await this.api.createDepartment(this.formName.trim());
-        else if (tab === 'businessUnits') await this.api.createBusinessUnit(this.formName.trim());
-        else if (tab === 'caseTypes') await this.api.createCaseType(this.formName.trim(), this.formDescription);
-        else if (tab === 'categories') await this.api.createCategory(this.formName.trim(), this.formKeywords);
-        this.toast.success(`${this.tabLabel().slice(0, -1)} created`);
+        if (tab === 'departments') await this.api.createDepartment(this.formName.trim(), this.formDescription.trim() || undefined);
+        else if (tab === 'businessUnits') await this.api.createBusinessUnit(this.formName.trim(), this.formDescription.trim() || undefined);
+        else if (tab === 'caseTypes') await this.api.createCaseType(this.formName.trim(), this.formDescription.trim() || undefined);
+        else if (tab === 'categories') await this.api.createCategory(this.formName.trim(), this.formDescription.trim() || undefined, this.formKeywords || undefined, this.formSourceType);
+        this.toast.success(`${this.tabLabel()!.slice(0, -1)} created`);
       }
       this.closeModal();
       await this.loadAll();
@@ -316,7 +347,7 @@ export class MasterDataComponent {
       else if (tab === 'businessUnits') await this.api.updateBusinessUnit(item.id, body);
       else if (tab === 'caseTypes') await this.api.updateCaseType(item.id, body);
       else if (tab === 'categories') await this.api.updateCategory(item.id, body);
-      this.toast.success(item.active ? `${this.tabLabel().slice(0, -1)} deactivated` : `${this.tabLabel().slice(0, -1)} activated`);
+      this.toast.success(item.active ? `${this.tabLabel()!.slice(0, -1)} deactivated` : `${this.tabLabel()!.slice(0, -1)} activated`);
       await this.loadAll();
     } catch {
       this.toast.error('Failed to update status');
